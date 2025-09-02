@@ -12,12 +12,12 @@ setup(
         ('share/' + package_name, ['package.xml']),
     ],
     install_requires=['setuptools'],
+    zip_safe=False,
     url='',
     license='Apache License 2.0',
     author='Hello Robot Inc.',
     author_email='support@hello-robot.com',
-    description='The hello_helpers package',\
-    tests_require=['pytest'],
+    description='The hello_helpers package',
     entry_points={
         'console_scripts': [
             'configure_wrist = hello_helpers.configure_wrist:main',
