@@ -68,10 +68,17 @@ def generate_launch_description():
                                       ('joint_states', '/stretch/joint_states')],
                           parameters=stretch_driver_params)
 
+    # Relative pose publisher - computes and publishes relative pose from driver startup point
+    relative_pose_publisher = Node(package='stretch_core',
+                                   executable='relative_pose_publisher',
+                                   output='log',
+                                   arguments=['--ros-args', '--log-level', 'info'])
+
     return LaunchDescription([declare_broadcast_odom_tf_arg,
                               declare_fail_out_of_range_goal_arg,
                               declare_mode_arg,
                               declare_controller_arg,
                               joint_state_publisher,
                               robot_state_publisher,
-                              stretch_driver])
+                              stretch_driver,
+                              relative_pose_publisher])
