@@ -85,6 +85,11 @@ class StretchDriver(Node):
         if STREAMING_POSITION_DEBUG:
             self.streaming_controller_lt = LoopTimer(name="Streaming Position", print_debug=STREAMING_POSITION_DEBUG)
         self.streaming_position_activated = False
+        
+        # Teleop mode tracking variables
+        self.teleop_linear_velocity_mps = 0.0
+        self.teleop_angular_velocity_radps = 0.0
+        
         self.ros_setup()
 
     def set_gamepad_motion_callback(self, joy):
@@ -186,6 +191,9 @@ class StretchDriver(Node):
                 self.gamepad_teleop.do_motion(unpack_joy_to_gamepad_state(self.received_gamepad_joy_msg),robot=self.robot)
             else:
                 self.gamepad_teleop.do_motion(robot=self.robot)
+            
+            # Extract velocity from robot base status for teleop publishing
+            # We'll publish the actual velocities after robot status is obtained
         else:
             self.gamepad_teleop.update_gamepad_state(self.robot) # Update gamepad input readings within gamepad_teleop instance
         
@@ -423,6 +431,25 @@ class StretchDriver(Node):
         mode_msg = String()
         mode_msg.data = self.robot_mode
         self.mode_pub.publish(mode_msg)
+        
+        # publish teleop mode status
+        is_teleop_msg = Bool()
+        is_teleop_msg.data = (self.robot_mode == 'gamepad')
+        self.is_teleop_pub.publish(is_teleop_msg)
+        
+        # publish teleop velocity (from gamepad)
+        cmd_vel_teleop_msg = Twist()
+        if self.robot_mode == 'gamepad':
+            # Get velocity from current base status
+            cmd_vel_teleop_msg.linear.x = x_vel
+            cmd_vel_teleop_msg.linear.y = y_vel
+            cmd_vel_teleop_msg.angular.z = theta_vel
+        else:
+            # Not in gamepad mode, publish zero velocities
+            cmd_vel_teleop_msg.linear.x = 0.0
+            cmd_vel_teleop_msg.linear.y = 0.0
+            cmd_vel_teleop_msg.angular.z = 0.0
+        self.cmd_vel_teleop_pub.publish(cmd_vel_teleop_msg)
 
         # publish end of arm tool
         tool_msg = String()
@@ -970,6 +997,10 @@ class StretchDriver(Node):
         
         self.is_gamepad_dongle_pub = self.create_publisher(Bool,'is_gamepad_dongle', 1)
         self.gamepad_state_pub = self.create_publisher(Joy,'stretch_gamepad_state', 1) # decode using gamepad_conversion.unpack_joy_to_gamepad_state() on client side
+        
+        # Teleop mode publishers
+        self.cmd_vel_teleop_pub = self.create_publisher(Twist, '/stretch/cmd_vel_teleop', 1)
+        self.is_teleop_pub = self.create_publisher(Bool, '/stretch/is_teleop', 1)
 
         self.main_group = ReentrantCallbackGroup()
         self.mutex_group = MutuallyExclusiveCallbackGroup()
