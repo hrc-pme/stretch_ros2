@@ -1,7 +1,7 @@
 import numpy as np
 import heapq as he
 
-cimport numpy as np
+cimport numpy as cnp
 from cpython cimport bool
 import cython
 
@@ -13,19 +13,19 @@ import cython
 # gcc -shared -pthread -fPIC -fwrapv -ffast-math -O3 -Wall -fno-strict-aliasing -I/usr/include/python2.7 -o cython_min_cost_path.so cython_min_cost_path.c
 
 DTYPE0 = np.float32
-ctypedef np.float32_t DTYPE0_t
+ctypedef cnp.float32_t DTYPE0_t
 
 DTYPE1 = np.uint8
-ctypedef np.uint8_t DTYPE1_t
+ctypedef cnp.uint8_t DTYPE1_t
 
 DTYPE2 = np.int8
-ctypedef np.int8_t DTYPE2_t
+ctypedef cnp.int8_t DTYPE2_t
 
 DTYPE3 = np.int64
-ctypedef np.int64_t DTYPE3_t
+ctypedef cnp.int64_t DTYPE3_t
 
 DTYPE4 = np.uint16
-ctypedef np.uint16_t DTYPE4_t
+ctypedef cnp.uint16_t DTYPE4_t
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
@@ -37,7 +37,7 @@ def cython_costs():
     return min_cost, max_cost, none_shall_pass
 
 
-def cython_cost_map(np.ndarray[DTYPE0_t, ndim=2] distance_image):
+def cython_cost_map(cnp.ndarray[DTYPE0_t, ndim=2] distance_image):
     # Each pixel coordinate, [xi, yi], in a path has an associated
     # cost, c[xi,yi]. The cost of a path is the sum of these
     # costs, Sum(cost(path[i])).
@@ -90,7 +90,7 @@ def cython_cost_map(np.ndarray[DTYPE0_t, ndim=2] distance_image):
     # distance > min_robot_distance -> cost = none_shall_pass
 
     cdef float min_cost_in_image = max_cost
-    cdef np.ndarray[DTYPE0_t, ndim=2] cost_image = np.empty((height, width), dtype=DTYPE0)
+    cdef cnp.ndarray[DTYPE0_t, ndim=2] cost_image = np.empty((height, width), dtype=DTYPE0)
     for y in range(height):
         for x in range(width):
             val = distance_image[y,x]
@@ -116,20 +116,20 @@ def cython_4_way_connectivity():
     # 1   2
     #   3
 
-    cdef np.ndarray[DTYPE1_t, ndim=1] opposite_direction = np.zeros((4,), dtype=DTYPE1)
+    cdef cnp.ndarray[DTYPE1_t, ndim=1] opposite_direction = np.zeros((4,), dtype=DTYPE1)
     opposite_direction[0] = 3
     opposite_direction[1] = 2
     opposite_direction[2] = 1
     opposite_direction[3] = 0
     
-    cdef np.ndarray[DTYPE2_t, ndim=2] direction_to_xy = np.zeros((4, 2), dtype=DTYPE2)
+    cdef cnp.ndarray[DTYPE2_t, ndim=2] direction_to_xy = np.zeros((4, 2), dtype=DTYPE2)
     direction_to_xy[0] = [0, -1]
     direction_to_xy[1] = [-1, 0]
     direction_to_xy[2] = [1, 0]
     direction_to_xy[3] = [0, 1]
 
     # 4 cardinal directions (up, left, right, down)
-    cdef np.ndarray[DTYPE2_t, ndim=1] directions = np.array([0, 1, 2, 3], dtype=DTYPE2)
+    cdef cnp.ndarray[DTYPE2_t, ndim=1] directions = np.array([0, 1, 2, 3], dtype=DTYPE2)
 
     cdef int no_direction = 255
     cdef int start_marker = 250
@@ -142,7 +142,7 @@ def cython_8_way_connectivity():
     # 3   4
     # 5 6 7
 
-    cdef np.ndarray[DTYPE1_t, ndim=1] opposite_direction = np.zeros((10,), dtype=DTYPE1)
+    cdef cnp.ndarray[DTYPE1_t, ndim=1] opposite_direction = np.zeros((10,), dtype=DTYPE1)
     opposite_direction[0] = 7
     opposite_direction[1] = 6
     opposite_direction[2] = 5
@@ -152,7 +152,7 @@ def cython_8_way_connectivity():
     opposite_direction[6] = 1
     opposite_direction[7] = 0
 
-    cdef np.ndarray[DTYPE2_t, ndim=2] direction_to_xy = np.zeros((10, 2), dtype=DTYPE2)
+    cdef cnp.ndarray[DTYPE2_t, ndim=2] direction_to_xy = np.zeros((10, 2), dtype=DTYPE2)
     direction_to_xy[0] = [-1, -1]
     direction_to_xy[1] = [ 0, -1]
     direction_to_xy[2] = [ 1, -1]
@@ -163,7 +163,7 @@ def cython_8_way_connectivity():
     direction_to_xy[7] = [ 1,  1]
 
     # 8 directions
-    cdef np.ndarray[DTYPE2_t, ndim=1] directions = np.array([0, 1, 2, 3, 4, 5, 6, 7], dtype=DTYPE2)
+    cdef cnp.ndarray[DTYPE2_t, ndim=1] directions = np.array([0, 1, 2, 3, 4, 5, 6, 7], dtype=DTYPE2)
 
     cdef int no_direction = 255
     cdef int start_marker = 250
@@ -171,12 +171,12 @@ def cython_8_way_connectivity():
     return directions, no_direction, start_marker, direction_to_xy, opposite_direction
 
 
-def cython_direction_image_to_path(np.ndarray[DTYPE1_t, ndim=2] direction_image,
-                                   np.ndarray[DTYPE3_t, ndim=1] end_xy):
+def cython_direction_image_to_path(cnp.ndarray[DTYPE1_t, ndim=2] direction_image,
+                                   cnp.ndarray[DTYPE3_t, ndim=1] end_xy):
 
-    cdef np.ndarray[DTYPE1_t, ndim=1] opposite_direction
-    cdef np.ndarray[DTYPE2_t, ndim=2] direction_to_xy
-    cdef np.ndarray[DTYPE2_t, ndim=1] directions
+    cdef cnp.ndarray[DTYPE1_t, ndim=1] opposite_direction
+    cdef cnp.ndarray[DTYPE2_t, ndim=2] direction_to_xy
+    cdef cnp.ndarray[DTYPE2_t, ndim=1] directions
     cdef int no_direction
     cdef int start_marker
     
@@ -187,7 +187,7 @@ def cython_direction_image_to_path(np.ndarray[DTYPE1_t, ndim=2] direction_image,
     cdef int end_x = end_xy[0]
     cdef int end_y = end_xy[1]
     cdef int n
-    cdef np.ndarray[DTYPE2_t, ndim=1] direction
+    cdef cnp.ndarray[DTYPE2_t, ndim=1] direction
 
     if direction_image[end_y, end_x] == no_direction:
         path = None
@@ -207,9 +207,9 @@ def cython_direction_image_to_path(np.ndarray[DTYPE1_t, ndim=2] direction_image,
     return path
 
 
-def cython_min_cost_path(np.ndarray[DTYPE0_t, ndim=2] distance_image,
-                         np.ndarray[DTYPE3_t, ndim=1] start_xy,
-                         np.ndarray[DTYPE3_t, ndim=1] end_xy):
+def cython_min_cost_path(cnp.ndarray[DTYPE0_t, ndim=2] distance_image,
+                         cnp.ndarray[DTYPE3_t, ndim=1] start_xy,
+                         cnp.ndarray[DTYPE3_t, ndim=1] end_xy):
     # Searches for a minimum cost path using 4-way connectivity and no
     # heuristic. This tracks the ridges in distance maps well. It does
     # not perform well if the distance map is clipped to have a flat
@@ -234,15 +234,15 @@ def cython_min_cost_path(np.ndarray[DTYPE0_t, ndim=2] distance_image,
     cdef float none_shall_pass
     min_cost, max_cost, none_shall_pass = cython_costs()
 
-    cdef np.ndarray[DTYPE1_t, ndim=1] opposite_direction
-    cdef np.ndarray[DTYPE2_t, ndim=2] direction_to_xy
-    cdef np.ndarray[DTYPE2_t, ndim=1] directions
+    cdef cnp.ndarray[DTYPE1_t, ndim=1] opposite_direction
+    cdef cnp.ndarray[DTYPE2_t, ndim=2] direction_to_xy
+    cdef cnp.ndarray[DTYPE2_t, ndim=1] directions
     cdef int no_direction
     cdef int start_marker
     
     directions, no_direction, start_marker, direction_to_xy, opposite_direction = cython_4_way_connectivity()
 
-    cdef np.ndarray[DTYPE1_t, ndim=2] direction_image = np.full_like(distance_image, no_direction, dtype=DTYPE1)
+    cdef cnp.ndarray[DTYPE1_t, ndim=2] direction_image = np.full_like(distance_image, no_direction, dtype=DTYPE1)
     
     h = []
     cdef bool at_end = False
@@ -291,8 +291,8 @@ def cython_min_cost_path(np.ndarray[DTYPE0_t, ndim=2] distance_image,
     return path
     
 
-def cython_all_paths(np.ndarray[DTYPE0_t, ndim=2] distance_image,
-                     np.ndarray[DTYPE3_t, ndim=1] start_xy):
+def cython_all_paths(cnp.ndarray[DTYPE0_t, ndim=2] distance_image,
+                     cnp.ndarray[DTYPE3_t, ndim=1] start_xy):
     # Produces representations that allow for the efficient
     # construction of minimum paths to any location from start_xy.
     # The minimum paths tend to track the ridges in the provided
@@ -321,15 +321,15 @@ def cython_all_paths(np.ndarray[DTYPE0_t, ndim=2] distance_image,
     cdef float none_shall_pass
     min_cost, max_cost, none_shall_pass = cython_costs()
 
-    cdef np.ndarray[DTYPE1_t, ndim=1] opposite_direction
-    cdef np.ndarray[DTYPE2_t, ndim=2] direction_to_xy
-    cdef np.ndarray[DTYPE2_t, ndim=1] directions
+    cdef cnp.ndarray[DTYPE1_t, ndim=1] opposite_direction
+    cdef cnp.ndarray[DTYPE2_t, ndim=2] direction_to_xy
+    cdef cnp.ndarray[DTYPE2_t, ndim=1] directions
     cdef int no_direction
     cdef int start_marker
     directions, no_direction, start_marker, direction_to_xy, opposite_direction = cython_4_way_connectivity()
     
-    cdef np.ndarray[DTYPE1_t, ndim=2] direction_image = np.full_like(distance_image, no_direction, dtype=DTYPE1)
-    cdef np.ndarray[DTYPE4_t, ndim=2] path_length_image = np.zeros_like(distance_image, dtype=DTYPE4)
+    cdef cnp.ndarray[DTYPE1_t, ndim=2] direction_image = np.full_like(distance_image, no_direction, dtype=DTYPE1)
+    cdef cnp.ndarray[DTYPE4_t, ndim=2] path_length_image = np.zeros_like(distance_image, dtype=DTYPE4)
     
     h = []
     cdef int current_x = start_xy[0]
