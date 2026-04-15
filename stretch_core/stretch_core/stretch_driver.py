@@ -48,6 +48,7 @@ class StretchDriver(Node):
         super().__init__('stretch_driver')
         self.use_robotis_head = True
         self.use_robotis_end_of_arm = True
+        self.chassis_only = False
 
         # Initialize calibration offsets
         self.head_tilt_calibrated_offset_rad = 0.0
@@ -148,22 +149,23 @@ class StretchDriver(Node):
             if len(qpos) != Idx.num_joints:
                 self.get_logger().error('Received qpos does not match the number of joints in the robot')
                 return
-            self.robot.arm.move_to(qpos[Idx.ARM])
-            self.robot.lift.move_to(qpos[Idx.LIFT])
-            self.robot.end_of_arm.move_to('wrist_yaw', qpos[Idx.WRIST_YAW])
-            if 'wrist_pitch' in self.robot.end_of_arm.joints:
-                self.robot.end_of_arm.move_to('wrist_pitch', qpos[Idx.WRIST_PITCH])
-            if 'wrist_roll' in self.robot.end_of_arm.joints:
-                self.robot.end_of_arm.move_to('wrist_roll', qpos[Idx.WRIST_ROLL])
-            self.robot.head.move_to('head_pan', qpos[Idx.HEAD_PAN])
-            self.robot.head.move_to('head_tilt', qpos[Idx.HEAD_TILT])
+            if not self.chassis_only:
+                self.robot.arm.move_to(qpos[Idx.ARM])
+                self.robot.lift.move_to(qpos[Idx.LIFT])
+                self.robot.end_of_arm.move_to('wrist_yaw', qpos[Idx.WRIST_YAW])
+                if 'wrist_pitch' in self.robot.end_of_arm.joints:
+                    self.robot.end_of_arm.move_to('wrist_pitch', qpos[Idx.WRIST_PITCH])
+                if 'wrist_roll' in self.robot.end_of_arm.joints:
+                    self.robot.end_of_arm.move_to('wrist_roll', qpos[Idx.WRIST_ROLL])
+                self.robot.head.move_to('head_pan', qpos[Idx.HEAD_PAN])
+                self.robot.head.move_to('head_tilt', qpos[Idx.HEAD_TILT])
             if abs(qpos[Idx.BASE_TRANSLATE]) > 0.0 and abs(qpos[Idx.BASE_ROTATE]) > 0.0 and self.robot_mode != 'position':
                 self.get_logger().error('Cannot move base in both translation and rotation at the same time in position mode')
             elif abs(qpos[Idx.BASE_TRANSLATE]) > 0.0 and self.robot_mode == 'position':
                 self.robot.base.translate_by(qpos[Idx.BASE_TRANSLATE])
             elif abs(qpos[Idx.BASE_ROTATE]) > 0.0 and self.robot_mode == 'position':
                 self.robot.base.rotate_by(qpos[Idx.BASE_ROTATE])
-            if 'stretch_gripper' in self.robot.end_of_arm.joints:
+            if (not self.chassis_only) and ('stretch_gripper' in self.robot.end_of_arm.joints):
                 pos = self.gripper_conversion.finger_to_robotis(qpos[Idx.GRIPPER])
                 self.robot.end_of_arm.move_to('stretch_gripper', pos)
             self.get_logger().info(f"Moved to position qpos: {qpos}")
@@ -225,84 +227,85 @@ class StretchDriver(Node):
         y_vel = base_status['y_vel']
         theta_vel = base_status['theta_vel']
 
-        # assign relevant arm status to variables
-        arm_status = robot_status['arm']
-        if self.backlash_state['wrist_extension_retracted']:
-            arm_backlash_correction = self.wrist_extension_calibrated_retracted_offset_m
-        else:
-            arm_backlash_correction = 0.0
-
-        if BACKLASH_DEBUG:
-            print('arm_backlash_correction =', arm_backlash_correction)
-        pos_out = arm_status['pos'] + arm_backlash_correction
-        vel_out = arm_status['vel']
-        eff_out = arm_status['motor']['effort_pct']
-
-        lift_status = robot_status['lift']
-        pos_up = lift_status['pos']
-        vel_up = lift_status['vel']
-        eff_up = lift_status['motor']['effort_pct']
-
-        if self.use_robotis_end_of_arm:
-            # assign relevant wrist status to variables
-            wrist_yaw_status = robot_status['end_of_arm']['wrist_yaw']
-            wrist_yaw_rad = wrist_yaw_status['pos']
-            wrist_yaw_vel = wrist_yaw_status['vel']
-            wrist_yaw_effort = wrist_yaw_status['effort']
-            
-            dex_wrist_attached = False
-            if 'wrist_pitch' in robot_status['end_of_arm']:
-                dex_wrist_attached = True
-            
-            if dex_wrist_attached:
-                wrist_pitch_status = robot_status['end_of_arm']['wrist_pitch']
-                wrist_pitch_rad = wrist_pitch_status['pos']
-                wrist_pitch_vel = wrist_pitch_status['vel']
-                wrist_pitch_effort = wrist_pitch_status['effort']
-
-                wrist_roll_status = robot_status['end_of_arm']['wrist_roll']
-                wrist_roll_rad = wrist_roll_status['pos']
-                wrist_roll_vel = wrist_roll_status['vel']
-                wrist_roll_effort = wrist_roll_status['effort']
-
-            # assign relevant gripper status to variables
-            if 'stretch_gripper' in self.robot.end_of_arm.joints:
-                gripper_status = robot_status['end_of_arm']['stretch_gripper']
-                if GRIPPER_DEBUG:
-                    print('-----------------------')
-                    print('gripper_status[\'pos\'] =', gripper_status['pos'])
-                    print('gripper_status[\'pos_pct\'] =', gripper_status['pos_pct'])
-                gripper_aperture_m, gripper_finger_rad, gripper_finger_effort, gripper_finger_vel = \
-                    self.gripper_conversion.status_to_all(gripper_status)
-                if GRIPPER_DEBUG:
-                    print('gripper_aperture_m =', gripper_aperture_m)
-                    print('gripper_finger_rad =', gripper_finger_rad)
-                    print('-----------------------')
-
-        if self.use_robotis_head:
-            # assign relevant head pan status to variables
-            head_pan_status = robot_status['head']['head_pan']
-            if self.backlash_state['head_pan_looked_left']:
-                pan_backlash_correction = self.head_pan_calibrated_looked_left_offset_rad
+        dex_wrist_attached = False
+        if not self.chassis_only:
+            # assign relevant arm status to variables
+            arm_status = robot_status['arm']
+            if self.backlash_state['wrist_extension_retracted']:
+                arm_backlash_correction = self.wrist_extension_calibrated_retracted_offset_m
             else:
-                pan_backlash_correction = 0.0
-            if BACKLASH_DEBUG:
-                print('pan_backlash_correction =', pan_backlash_correction)
-            head_pan_rad = head_pan_status['pos'] + self.head_pan_calibrated_offset_rad + pan_backlash_correction
-            head_pan_vel = head_pan_status['vel']
-            head_pan_effort = head_pan_status['effort']
+                arm_backlash_correction = 0.0
 
-            # assign relevant head tilt status to variables
-            head_tilt_status = robot_status['head']['head_tilt']
-            if self.backlash_state['head_tilt_looking_up']:
-                tilt_backlash_correction = self.head_tilt_calibrated_looking_up_offset_rad
-            else:
-                tilt_backlash_correction = 0.0
             if BACKLASH_DEBUG:
-                print('tilt_backlash_correction =', tilt_backlash_correction)
-            head_tilt_rad = head_tilt_status['pos'] + self.head_tilt_calibrated_offset_rad + tilt_backlash_correction
-            head_tilt_vel = head_tilt_status['vel']
-            head_tilt_effort = head_tilt_status['effort']
+                print('arm_backlash_correction =', arm_backlash_correction)
+            pos_out = arm_status['pos'] + arm_backlash_correction
+            vel_out = arm_status['vel']
+            eff_out = arm_status['motor']['effort_pct']
+
+            lift_status = robot_status['lift']
+            pos_up = lift_status['pos']
+            vel_up = lift_status['vel']
+            eff_up = lift_status['motor']['effort_pct']
+
+            if self.use_robotis_end_of_arm:
+                # assign relevant wrist status to variables
+                wrist_yaw_status = robot_status['end_of_arm']['wrist_yaw']
+                wrist_yaw_rad = wrist_yaw_status['pos']
+                wrist_yaw_vel = wrist_yaw_status['vel']
+                wrist_yaw_effort = wrist_yaw_status['effort']
+                
+                if 'wrist_pitch' in robot_status['end_of_arm']:
+                    dex_wrist_attached = True
+                
+                if dex_wrist_attached:
+                    wrist_pitch_status = robot_status['end_of_arm']['wrist_pitch']
+                    wrist_pitch_rad = wrist_pitch_status['pos']
+                    wrist_pitch_vel = wrist_pitch_status['vel']
+                    wrist_pitch_effort = wrist_pitch_status['effort']
+
+                    wrist_roll_status = robot_status['end_of_arm']['wrist_roll']
+                    wrist_roll_rad = wrist_roll_status['pos']
+                    wrist_roll_vel = wrist_roll_status['vel']
+                    wrist_roll_effort = wrist_roll_status['effort']
+
+                # assign relevant gripper status to variables
+                if 'stretch_gripper' in self.robot.end_of_arm.joints:
+                    gripper_status = robot_status['end_of_arm']['stretch_gripper']
+                    if GRIPPER_DEBUG:
+                        print('-----------------------')
+                        print('gripper_status[\'pos\'] =', gripper_status['pos'])
+                        print('gripper_status[\'pos_pct\'] =', gripper_status['pos_pct'])
+                    gripper_aperture_m, gripper_finger_rad, gripper_finger_effort, gripper_finger_vel = \
+                        self.gripper_conversion.status_to_all(gripper_status)
+                    if GRIPPER_DEBUG:
+                        print('gripper_aperture_m =', gripper_aperture_m)
+                        print('gripper_finger_rad =', gripper_finger_rad)
+                        print('-----------------------')
+
+            if self.use_robotis_head:
+                # assign relevant head pan status to variables
+                head_pan_status = robot_status['head']['head_pan']
+                if self.backlash_state['head_pan_looked_left']:
+                    pan_backlash_correction = self.head_pan_calibrated_looked_left_offset_rad
+                else:
+                    pan_backlash_correction = 0.0
+                if BACKLASH_DEBUG:
+                    print('pan_backlash_correction =', pan_backlash_correction)
+                head_pan_rad = head_pan_status['pos'] + self.head_pan_calibrated_offset_rad + pan_backlash_correction
+                head_pan_vel = head_pan_status['vel']
+                head_pan_effort = head_pan_status['effort']
+
+                # assign relevant head tilt status to variables
+                head_tilt_status = robot_status['head']['head_tilt']
+                if self.backlash_state['head_tilt_looking_up']:
+                    tilt_backlash_correction = self.head_tilt_calibrated_looking_up_offset_rad
+                else:
+                    tilt_backlash_correction = 0.0
+                if BACKLASH_DEBUG:
+                    print('tilt_backlash_correction =', tilt_backlash_correction)
+                head_tilt_rad = head_tilt_status['pos'] + self.head_tilt_calibrated_offset_rad + tilt_backlash_correction
+                head_tilt_vel = head_tilt_status['vel']
+                head_tilt_effort = head_tilt_status['effort']
 
         q = quaternion_from_euler(0.0, 0.0, theta)
 
@@ -437,75 +440,79 @@ class StretchDriver(Node):
         # publish joint state for the arm
         joint_state = JointState()
         joint_state.header.stamp = current_time
-        # joint_arm_l3 is the most proximal and joint_arm_l0 is the
-        # most distal joint of the telescoping arm model. The joints
-        # are connected in series such that moving the most proximal
-        # joint moves all the other joints in the global frame.
-        joint_state.name = ['wrist_extension', 'joint_lift', 'joint_arm_l3', 'joint_arm_l2', 'joint_arm_l1', 'joint_arm_l0']
+        positions = []
+        velocities = []
+        efforts = []
+        if not self.chassis_only:
+            # joint_arm_l3 is the most proximal and joint_arm_l0 is the
+            # most distal joint of the telescoping arm model. The joints
+            # are connected in series such that moving the most proximal
+            # joint moves all the other joints in the global frame.
+            joint_state.name = ['wrist_extension', 'joint_lift', 'joint_arm_l3', 'joint_arm_l2', 'joint_arm_l1', 'joint_arm_l0']
 
-        # set positions of the telescoping joints
-        positions = [pos_out / 4.0 for i in range(4)]
-        # set lift position
-        positions.insert(0, pos_up)
-        # set wrist_extension position
-        positions.insert(0, pos_out)
+            # set positions of the telescoping joints
+            positions = [pos_out / 4.0 for i in range(4)]
+            # set lift position
+            positions.insert(0, pos_up)
+            # set wrist_extension position
+            positions.insert(0, pos_out)
 
-        # set velocities of the telescoping joints
-        velocities = [vel_out / 4.0 for i in range(4)]
-        # set lift velocity
-        velocities.insert(0, vel_up)
-        # set wrist_extension velocity
-        velocities.insert(0, vel_out)
+            # set velocities of the telescoping joints
+            velocities = [vel_out / 4.0 for i in range(4)]
+            # set lift velocity
+            velocities.insert(0, vel_up)
+            # set wrist_extension velocity
+            velocities.insert(0, vel_out)
 
-        # set efforts of the telescoping joints
-        efforts = [eff_out for i in range(4)]
-        # set lift effort
-        efforts.insert(0, eff_up)
-        # set wrist_extension effort
-        efforts.insert(0, eff_out)
+            # set efforts of the telescoping joints
+            efforts = [eff_out for i in range(4)]
+            # set lift effort
+            efforts.insert(0, eff_up)
+            # set wrist_extension effort
+            efforts.insert(0, eff_out)
 
-        if self.use_robotis_head:
-            head_joint_names = ['joint_head_pan', 'joint_head_tilt']
-            joint_state.name.extend(head_joint_names)
+            if self.use_robotis_head:
+                head_joint_names = ['joint_head_pan', 'joint_head_tilt']
+                joint_state.name.extend(head_joint_names)
 
-            positions.append(head_pan_rad)
-            velocities.append(head_pan_vel)
-            efforts.append(head_pan_effort)
+                positions.append(head_pan_rad)
+                velocities.append(head_pan_vel)
+                efforts.append(head_pan_effort)
 
-            positions.append(head_tilt_rad)
-            velocities.append(head_tilt_vel)
-            efforts.append(head_tilt_effort)
+                positions.append(head_tilt_rad)
+                velocities.append(head_tilt_vel)
+                efforts.append(head_tilt_effort)
 
-        if self.use_robotis_end_of_arm:
-            if dex_wrist_attached:
-                end_of_arm_joint_names = ['joint_wrist_yaw', 'joint_wrist_pitch', 'joint_wrist_roll']
+            if self.use_robotis_end_of_arm:
+                if dex_wrist_attached:
+                    end_of_arm_joint_names = ['joint_wrist_yaw', 'joint_wrist_pitch', 'joint_wrist_roll']
+                    if 'stretch_gripper' in self.robot.end_of_arm.joints:
+                        end_of_arm_joint_names = end_of_arm_joint_names + ['joint_gripper_finger_left', 'joint_gripper_finger_right']
+                else:
+                    if 'stretch_gripper' in self.robot.end_of_arm.joints:
+                        end_of_arm_joint_names = ['joint_wrist_yaw', 'joint_gripper_finger_left', 'joint_gripper_finger_right']
+                
+                joint_state.name.extend(end_of_arm_joint_names)
+
+                positions.append(wrist_yaw_rad)
+                velocities.append(wrist_yaw_vel)
+                efforts.append(wrist_yaw_effort)
+
+                if dex_wrist_attached:
+                    positions.append(wrist_pitch_rad)
+                    velocities.append(wrist_pitch_vel)
+                    efforts.append(wrist_pitch_effort)
+
+                    positions.append(wrist_roll_rad)
+                    velocities.append(wrist_roll_vel)
+                    efforts.append(wrist_roll_effort)
                 if 'stretch_gripper' in self.robot.end_of_arm.joints:
-                    end_of_arm_joint_names = end_of_arm_joint_names + ['joint_gripper_finger_left', 'joint_gripper_finger_right']
-            else:
-                if 'stretch_gripper' in self.robot.end_of_arm.joints:
-                    end_of_arm_joint_names = ['joint_wrist_yaw', 'joint_gripper_finger_left', 'joint_gripper_finger_right']
-            
-            joint_state.name.extend(end_of_arm_joint_names)
-
-            positions.append(wrist_yaw_rad)
-            velocities.append(wrist_yaw_vel)
-            efforts.append(wrist_yaw_effort)
-
-            if dex_wrist_attached:
-                positions.append(wrist_pitch_rad)
-                velocities.append(wrist_pitch_vel)
-                efforts.append(wrist_pitch_effort)
-
-                positions.append(wrist_roll_rad)
-                velocities.append(wrist_roll_vel)
-                efforts.append(wrist_roll_effort)
-            if 'stretch_gripper' in self.robot.end_of_arm.joints:
-                positions.append(gripper_finger_rad)
-                velocities.append(gripper_finger_vel)
-                efforts.append(gripper_finger_effort)
-                positions.append(gripper_finger_rad)
-                velocities.append(gripper_finger_vel)
-                efforts.append(gripper_finger_effort)
+                    positions.append(gripper_finger_rad)
+                    velocities.append(gripper_finger_vel)
+                    efforts.append(gripper_finger_effort)
+                    positions.append(gripper_finger_rad)
+                    velocities.append(gripper_finger_vel)
+                    efforts.append(gripper_finger_effort)
 
         # set joint_state
         joint_state.position = positions
@@ -673,16 +680,17 @@ class StretchDriver(Node):
         with self.robot_stop_lock:
             self.robot.base.translate_by(0.0)
             self.robot.base.rotate_by(0.0)
-            self.robot.arm.move_by(0.0)
-            self.robot.lift.move_by(0.0)
-            # self.robot.push_command() #Moved to main
+            if not self.chassis_only:
+                self.robot.arm.move_by(0.0)
+                self.robot.lift.move_by(0.0)
+                # self.robot.push_command() #Moved to main
 
-            self.robot.head.move_by('head_pan', 0.0)
-            self.robot.head.move_by('head_tilt', 0.0)
-            self.robot.end_of_arm.move_by('wrist_yaw', 0.0)
-            if 'stretch_gripper' in self.robot.end_of_arm.joints:
-                self.robot.end_of_arm.move_by('stretch_gripper', 0.0)
-            # self.robot.push_command() #Moved to main
+                self.robot.head.move_by('head_pan', 0.0)
+                self.robot.head.move_by('head_tilt', 0.0)
+                self.robot.end_of_arm.move_by('wrist_yaw', 0.0)
+                if 'stretch_gripper' in self.robot.end_of_arm.joints:
+                    self.robot.end_of_arm.move_by('stretch_gripper', 0.0)
+                # self.robot.push_command() #Moved to main
 
         self.get_logger().info('Received stop_the_robot service call, so commanded all actuators to stop.')
         response.success = True
@@ -861,11 +869,19 @@ class StretchDriver(Node):
             rclpy.shutdown()
             exit()
         
+        self.declare_parameter('chassis_only', False)
+        self.chassis_only = self.get_parameter('chassis_only').value
+        if self.chassis_only:
+            self.use_robotis_head = False
+            self.use_robotis_end_of_arm = False
+
         self.robot = rb.Robot()
-        #Handle the non_dxl status in local loop, not thread
-        if not self.robot.startup(start_non_dxl_thread=False,
-                                  start_dxl_thread=True,
-                                  start_sys_mon_thread=True):
+        # Handle the non_dxl status in local loop, not thread
+        if not self.robot.startup(
+            start_non_dxl_thread=False,
+            start_dxl_thread=not self.chassis_only,
+            start_sys_mon_thread=True,
+        ):
             self.get_logger().fatal('Robot startup failed.')
             rclpy.shutdown()
             exit()
