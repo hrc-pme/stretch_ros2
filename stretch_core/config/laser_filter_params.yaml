@@ -20,7 +20,7 @@ laser_filter:
       name: box
       type: laser_filters/LaserScanBoxFilter
       params:
-        box_frame: laser
+        box_frame: stretch3/laser
         min_x: -0.1
         max_x: 0.3
         min_y: -0.3

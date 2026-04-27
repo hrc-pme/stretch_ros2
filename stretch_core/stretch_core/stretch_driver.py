@@ -44,6 +44,11 @@ STREAMING_POSITION_DEBUG = False
 
 class StretchDriver(Node):
 
+    @staticmethod
+    def _apply_tf_prefix(prefix, frame):
+        prefix = (prefix or '').strip('/')
+        return f'{prefix}/{frame}' if prefix else frame
+
     def __init__(self):
         super().__init__('stretch_driver')
         self.use_robotis_head = True
@@ -327,7 +332,7 @@ class StretchDriver(Node):
             b = TransformStamped()
             b.header.stamp = current_time
             b.header.frame_id = self.base_frame_id
-            b.child_frame_id = "base_footprint"
+            b.child_frame_id = self.base_footprint_frame_id
             b.transform.translation.x = 0.0
             b.transform.translation.y = 0.0
             b.transform.translation.z = 0.0
@@ -536,7 +541,7 @@ class StretchDriver(Node):
 
         i = Imu()
         i.header.stamp = current_time
-        i.header.frame_id = 'imu_mobile_base'
+        i.header.frame_id = self.imu_mobile_base_frame_id
         i.angular_velocity.x = gx
         i.angular_velocity.y = gy
         i.angular_velocity.z = gz
@@ -553,7 +558,7 @@ class StretchDriver(Node):
 
         m = MagneticField()
         m.header.stamp = current_time
-        m.header.frame_id = 'imu_mobile_base'
+        m.header.frame_id = self.imu_mobile_base_frame_id
         self.magnetometer_mobile_base_pub.publish(m)
 
         accel_status = robot_status['wacc']
@@ -563,7 +568,7 @@ class StretchDriver(Node):
 
         i = Imu()
         i.header.stamp = current_time
-        i.header.frame_id = 'accel_wrist'
+        i.header.frame_id = self.accel_wrist_frame_id
         i.linear_acceleration.x = ax
         i.linear_acceleration.y = ay
         i.linear_acceleration.z = az
@@ -1012,10 +1017,17 @@ class StretchDriver(Node):
         self.get_logger().info(f"rate = {self.joint_state_rate} Hz")
         self.get_logger().info(f"twist timeout = {self.timeout_s} s")
 
-        self.base_frame_id = 'base_link'
+        self.declare_parameter('tf_frame_prefix', '')
+        self.tf_frame_prefix = self.get_parameter('tf_frame_prefix').value
+        self.get_logger().info(f"tf_frame_prefix = {self.tf_frame_prefix}")
+
+        self.base_frame_id = self._apply_tf_prefix(self.tf_frame_prefix, 'base_link')
         self.get_logger().info(f"base_frame_id = {self.base_frame_id}")
-        self.odom_frame_id = 'odom'
+        self.odom_frame_id = self._apply_tf_prefix(self.tf_frame_prefix, 'odom')
         self.get_logger().info(f"odom_frame_id = {self.odom_frame_id}")
+        self.base_footprint_frame_id = self._apply_tf_prefix(self.tf_frame_prefix, 'base_footprint')
+        self.imu_mobile_base_frame_id = self._apply_tf_prefix(self.tf_frame_prefix, 'imu_mobile_base')
+        self.accel_wrist_frame_id = self._apply_tf_prefix(self.tf_frame_prefix, 'accel_wrist')
 
         self.joint_state_pub = self.create_publisher(JointState, 'joint_states', 1)
         self.joint_limits_pub = self.create_publisher(JointState, 'joint_limits', 1)

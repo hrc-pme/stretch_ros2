@@ -11,6 +11,12 @@ import launch_ros
 def generate_launch_description():
     stretch_core_path = get_package_share_path('stretch_core')
 
+    declare_tf_prefix_arg = DeclareLaunchArgument(
+        'tf_prefix',
+        default_value='stretch3',
+        description='Prefix for TF frame IDs'
+    )
+
     declare_broadcast_odom_tf_arg = DeclareLaunchArgument(
         'broadcast_odom_tf',
         default_value='False', choices=['True', 'False'],
@@ -48,7 +54,8 @@ def generate_launch_description():
                                  executable='robot_state_publisher',
                                  output='both',
                                  parameters=[{'robot_description': robot_description_content},
-                                             {'publish_frequency': 30.0}],
+                                             {'publish_frequency': 30.0},
+                                             {'frame_prefix': [LaunchConfiguration('tf_prefix'), '/']}],
                                  arguments=['--ros-args', '--log-level', 'error'],)
 
     stretch_driver_params = [
@@ -57,7 +64,8 @@ def generate_launch_description():
          'controller_calibration_file': LaunchConfiguration('calibrated_controller_yaml_file'),
          'broadcast_odom_tf': LaunchConfiguration('broadcast_odom_tf'),
          'fail_out_of_range_goal': LaunchConfiguration('fail_out_of_range_goal'),
-         'mode': LaunchConfiguration('mode')}
+            'mode': LaunchConfiguration('mode'),
+            'tf_frame_prefix': LaunchConfiguration('tf_prefix')}
     ]
 
     stretch_driver = Node(package='stretch_core',
@@ -72,9 +80,11 @@ def generate_launch_description():
     relative_pose_publisher = Node(package='stretch_core',
                                    executable='relative_pose_publisher',
                                    output='log',
+                                   parameters=[{'tf_frame_prefix': LaunchConfiguration('tf_prefix')}],
                                    arguments=['--ros-args', '--log-level', 'info'])
 
-    return LaunchDescription([declare_broadcast_odom_tf_arg,
+    return LaunchDescription([declare_tf_prefix_arg,
+                              declare_broadcast_odom_tf_arg,
                               declare_fail_out_of_range_goal_arg,
                               declare_mode_arg,
                               declare_controller_arg,

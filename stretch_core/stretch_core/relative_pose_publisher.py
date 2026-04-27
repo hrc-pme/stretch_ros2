@@ -20,6 +20,11 @@ class RelativePosePublisher(Node):
     
     def __init__(self):
         super().__init__('relative_pose_publisher')
+
+        self.declare_parameter('tf_frame_prefix', '')
+        tf_prefix = self.get_parameter('tf_frame_prefix').value
+        tf_prefix = tf_prefix.strip('/') if tf_prefix else ''
+        self.relative_frame_id = f'{tf_prefix}/odom_relative' if tf_prefix else 'odom_relative'
         
         # 訂閱里程計數據
         self.odom_subscription = self.create_subscription(
@@ -111,7 +116,7 @@ class RelativePosePublisher(Node):
         # 發布完整位姿（包含四元數）
         pose_stamped_msg = PoseStamped()
         pose_stamped_msg.header.stamp = msg.header.stamp
-        pose_stamped_msg.header.frame_id = 'odom_relative'  # 使用自定義frame_id
+        pose_stamped_msg.header.frame_id = self.relative_frame_id  # 使用自定義frame_id
         pose_stamped_msg.pose.position.x = relative_x
         pose_stamped_msg.pose.position.y = relative_y
         pose_stamped_msg.pose.position.z = relative_z
@@ -142,7 +147,7 @@ class RelativePosePublisher(Node):
         # 發布完整位姿
         pose_stamped_msg = PoseStamped()
         pose_stamped_msg.header.stamp = timestamp
-        pose_stamped_msg.header.frame_id = 'odom_relative'
+        pose_stamped_msg.header.frame_id = self.relative_frame_id
         pose_stamped_msg.pose.position.x = 0.0
         pose_stamped_msg.pose.position.y = 0.0
         pose_stamped_msg.pose.position.z = 0.0
