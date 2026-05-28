@@ -1,4 +1,5 @@
 from ament_index_python.packages import get_package_share_path
+from pathlib import Path
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -41,7 +42,23 @@ def generate_launch_description():
         description='Path to the calibrated controller args file'
     )
 
-    robot_description_content = launch_ros.parameter_descriptions.ParameterValue( Command(['xacro ', str(get_package_share_path('stretch_description') / 'urdf' / 'stretch.urdf')]), value_type=str)
+    stretch_description_urdf_dir = Path(get_package_share_path('stretch_description')) / 'urdf'
+    package_description_xacro = stretch_description_urdf_dir / 'stretch.urdf'
+    exported_robot_urdf = Path('/root/stretch_user/stretch-se3-3092/exported_urdf/stretch.urdf')
+
+    if package_description_xacro.exists():
+        robot_description_content = launch_ros.parameter_descriptions.ParameterValue(
+            Command(['xacro ', str(package_description_xacro)]), value_type=str
+        )
+    elif exported_robot_urdf.exists():
+        robot_description_content = launch_ros.parameter_descriptions.ParameterValue(
+            Command(['cat ', str(exported_robot_urdf)]), value_type=str
+        )
+    else:
+        # Last-resort fallback for environments where only partial description assets are installed.
+        robot_description_content = launch_ros.parameter_descriptions.ParameterValue(
+            Command(['xacro ', str(stretch_description_urdf_dir / 'stretch_base_imu.xacro')]), value_type=str
+        )
 
     joint_state_publisher = Node(package='joint_state_publisher',
                                  executable='joint_state_publisher',
