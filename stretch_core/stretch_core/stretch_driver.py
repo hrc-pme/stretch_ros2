@@ -85,6 +85,9 @@ class StretchDriver(Node):
         self.voltage_history = []
         self.charging_state_history = [BatteryState.POWER_SUPPLY_STATUS_UNKNOWN] * 10
         self.charging_state = BatteryState.POWER_SUPPLY_STATUS_UNKNOWN
+        self.odom_reset_lock = threading.Lock()
+        self.odom_reset_origin = {'x': 0.0, 'y': 0.0, 'theta': 0.0}
+        self.latest_raw_odom = None
         
         self.gamepad_teleop = None
         self.received_gamepad_joy_msg = get_default_joy_msg()
@@ -225,12 +228,22 @@ class StretchDriver(Node):
         # obtain odometry
         # assign relevant base status to variables
         base_status = robot_status['base']
-        x = base_status['x']
-        y = base_status['y']
-        theta = base_status['theta']
-        x_vel = base_status['x_vel']
-        y_vel = base_status['y_vel']
+        raw_x = base_status['x']
+        raw_y = base_status['y']
+        raw_theta = base_status['theta']
+        raw_x_vel = base_status['x_vel']
+        raw_y_vel = base_status['y_vel']
         theta_vel = base_status['theta_vel']
+
+        with self.odom_reset_lock:
+            self.latest_raw_odom = {'x': raw_x, 'y': raw_y, 'theta': raw_theta}
+            x, y, theta, x_vel, y_vel = self.apply_odom_reset(
+                raw_x,
+                raw_y,
+                raw_theta,
+                raw_x_vel,
+                raw_y_vel,
+            )
 
         dex_wrist_attached = False
         if not self.chassis_only:
@@ -678,6 +691,45 @@ class StretchDriver(Node):
         self.streaming_position_activated = False
         self.get_logger().info('Deactivated streaming position.')
         return True, 'Deactivated streaming position.'
+
+    def normalize_angle(self, angle):
+        return (angle + np.pi) % (2.0 * np.pi) - np.pi
+
+    def apply_odom_reset(self, raw_x, raw_y, raw_theta, raw_x_vel, raw_y_vel):
+        dx = raw_x - self.odom_reset_origin['x']
+        dy = raw_y - self.odom_reset_origin['y']
+        origin_theta = self.odom_reset_origin['theta']
+        cos_theta = np.cos(-origin_theta)
+        sin_theta = np.sin(-origin_theta)
+
+        x = (dx * cos_theta) - (dy * sin_theta)
+        y = (dx * sin_theta) + (dy * cos_theta)
+        theta = self.normalize_angle(raw_theta - origin_theta)
+        x_vel = (raw_x_vel * cos_theta) - (raw_y_vel * sin_theta)
+        y_vel = (raw_x_vel * sin_theta) + (raw_y_vel * cos_theta)
+        return x, y, theta, x_vel, y_vel
+
+    def reset_odom_callback(self, request, response):
+        with self.odom_reset_lock:
+            if self.latest_raw_odom is None:
+                robot_status = self.robot.get_status()
+                base_status = robot_status['base']
+                self.latest_raw_odom = {
+                    'x': base_status['x'],
+                    'y': base_status['y'],
+                    'theta': base_status['theta'],
+                }
+
+            self.odom_reset_origin = copy.copy(self.latest_raw_odom)
+
+        reset_msg = Bool()
+        reset_msg.data = True
+        self.trajectory_reset_pub.publish(reset_msg)
+
+        self.get_logger().info('Reset odom origin. Current base pose now publishes as x=0, y=0, theta=0.')
+        response.success = True
+        response.message = 'Reset odom origin and requested trajectory history reset.'
+        return response
     
     # SERVICE CALLBACKS ##############
 
@@ -983,6 +1035,7 @@ class StretchDriver(Node):
         self.mode_pub = self.create_publisher(String, 'mode', 1)
         self.tool_pub = self.create_publisher(String, 'tool', 1)
         self.streaming_position_mode_pub = self.create_publisher(Bool, 'is_streaming_position', 1)
+        self.trajectory_reset_pub = self.create_publisher(Bool, '/robot_trajectory/reset', 1)
 
         self.imu_mobile_base_pub = self.create_publisher(Imu, 'imu_mobile_base', 1)
         self.magnetometer_mobile_base_pub = self.create_publisher(MagneticField, 'magnetometer_mobile_base', 1)
@@ -1106,6 +1159,11 @@ class StretchDriver(Node):
                                                             '/self_collision_avoidance',
                                                             self.self_collision_avoidance_callback,
                                                             callback_group=self.main_group)
+
+        self.reset_odom_service = self.create_service(Trigger,
+                                                      '/reset_odom',
+                                                      self.reset_odom_callback,
+                                                      callback_group=self.main_group)
 
         # start loop to command the mobile base velocity, publish
         # odometry, and publish joint states

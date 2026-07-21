@@ -90,15 +90,21 @@ def generate_launch_description():
                           emulate_tty=True,
                           output='screen',
                           remappings=[('cmd_vel', '/stretch/cmd_vel'),
-                                      ('joint_states', '/stretch/joint_states')],
+                                      ('joint_states', '/stretch/joint_states'),
+                                      ('odom', '/stretch3/odom'),
+                                      ('battery', '/stretch3/battery'),
+                                      ('is_homed', '/stretch3/is_homed'),
+                                      ('mode', '/stretch3/mode'),
+                                      ('tool', '/stretch3/tool'),
+                                      ('is_streaming_position', '/stretch3/is_streaming_position'),
+                                      ('imu_mobile_base', '/stretch3/imu_mobile_base'),
+                                      ('magnetometer_mobile_base', '/stretch3/magnetometer_mobile_base'),
+                                      ('imu_wrist', '/stretch3/imu_wrist'),
+                                      ('is_runstopped', '/stretch3/is_runstopped'),
+                                      ('is_gamepad_dongle', '/stretch3/is_gamepad_dongle'),
+                                      ('stretch_gamepad_state', '/stretch3/stretch_gamepad_state'),
+                                      ('joint_limits', '/stretch3/joint_limits')],
                           parameters=stretch_driver_params)
-
-    # Relative pose publisher - computes and publishes relative pose from driver startup point
-    relative_pose_publisher = Node(package='stretch_core',
-                                   executable='relative_pose_publisher',
-                                   output='log',
-                                   parameters=[{'tf_frame_prefix': LaunchConfiguration('tf_prefix')}],
-                                   arguments=['--ros-args', '--log-level', 'info'])
 
     return LaunchDescription([declare_tf_prefix_arg,
                               declare_broadcast_odom_tf_arg,
@@ -107,5 +113,4 @@ def generate_launch_description():
                               declare_controller_arg,
                               joint_state_publisher,
                               robot_state_publisher,
-                              stretch_driver,
-                              relative_pose_publisher])
+                              stretch_driver])
